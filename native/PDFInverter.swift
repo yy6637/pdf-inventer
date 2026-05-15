@@ -10,6 +10,44 @@ let delegate = AppDelegate()
 app.delegate = delegate
 app.run()
 
+// MARK: - Draggable Window (works around WKWebView consuming mouse events)
+
+class DraggableWindow: NSWindow {
+    private var dragStartMouse: NSPoint?
+    private var dragStartOrigin: NSPoint?
+
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .leftMouseDown || event.type == .leftMouseDragged || event.type == .leftMouseUp {
+            let titlebarH: CGFloat = 52
+            if let cv = contentView {
+                let pt = cv.convert(event.locationInWindow, from: nil)
+                let inTitlebar = pt.y >= cv.bounds.height - titlebarH
+
+                if event.type == .leftMouseDown {
+                    if inTitlebar {
+                        dragStartMouse = NSEvent.mouseLocation
+                        dragStartOrigin = frame.origin
+                        return
+                    } else {
+                        dragStartMouse = nil
+                    }
+                } else if event.type == .leftMouseDragged, let start = dragStartMouse, let origin = dragStartOrigin {
+                    let current = NSEvent.mouseLocation
+                    let dx = current.x - start.x
+                    let dy = current.y - start.y
+                    setFrameOrigin(NSPoint(x: origin.x + dx, y: origin.y + dy))
+                    return
+                } else if event.type == .leftMouseUp {
+                    dragStartMouse = nil
+                    dragStartOrigin = nil
+                    return
+                }
+            }
+        }
+        super.sendEvent(event)
+    }
+}
+
 // MARK: - Node.js Locator
 
 func findNode() -> String? {
@@ -68,7 +106,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func createWindow() {
         let rect = NSRect(x: 0, y: 0, width: 1280, height: 860)
 
-        window = NSWindow(
+        window = DraggableWindow(
             contentRect: rect,
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
