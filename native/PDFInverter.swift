@@ -19,12 +19,14 @@ class DraggableWindow: NSWindow {
     override func sendEvent(_ event: NSEvent) {
         if event.type == .leftMouseDown || event.type == .leftMouseDragged || event.type == .leftMouseUp {
             let titlebarH: CGFloat = 52
+            let trafficLightW: CGFloat = 70 // keep close/miniaturize/zoom clickable
             if let cv = contentView {
                 let pt = cv.convert(event.locationInWindow, from: nil)
                 let inTitlebar = pt.y >= cv.bounds.height - titlebarH
+                let hitTrafficLight = pt.x < trafficLightW
 
                 if event.type == .leftMouseDown {
-                    if inTitlebar {
+                    if inTitlebar && !hitTrafficLight {
                         dragStartMouse = NSEvent.mouseLocation
                         dragStartOrigin = frame.origin
                         return
