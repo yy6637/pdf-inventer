@@ -1,0 +1,15 @@
+{
+  "name": "pdf-inverter",
+  "version": "1.0.0",
+  "description": "PDF 图片反转工具",
+  "main": "main.js",
+  "scripts": {
+    "start": "node main.js",
+    "build:native": "bash native/build-app.sh",
+    "start:native": "open \"build/PDF 图片反转工具.app\""
+  },
+  "dependencies": {
+    "jspdf": "^2.5.1",
+    "pdfjs-dist": "3.11.174"
+  }
+}

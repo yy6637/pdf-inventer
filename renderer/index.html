@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDF 图片反转工具</title>
+<script src="/node_modules/pdfjs-dist/build/pdf.min.js"></script>
+<script src="/node_modules/jspdf/dist/jspdf.umd.min.js"></script>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>PDF 图片反转工具</h1>
+    <p class="subtitle">上传PDF文件自动进行导出图片并进行颜色反转处理，支持批量上传和下载。悬停图片可预览原图对比效果。</p>
+  </header>
+
+  <div id="uploadZone">
+    <input type="file" id="fileInput" accept=".pdf,image/*" multiple>
+    <span class="icon">📄</span>
+    <div class="title">点击上传或拖拽 PDF / 图片文件到此处</div>
+    <div class="hint">支持批量上传多个 PDF 和图片文件</div>
+  </div>
+
+  <div id="infoBar">
+    <div class="counts">
+      <span>共 <strong id="totalCount">0</strong> 张图片</span>
+      <span>已选择 <strong id="selectedCount">0</strong> 张</span>
+    </div>
+    <div class="info-status" id="statusText">就绪</div>
+  </div>
+
+  <div id="actionBar">
+    <button id="selectAllBtn">☐ 全选</button>
+    <button id="deselectAllBtn">☐ 取消全选</button>
+    <button id="saveToFolderBtn">💾 保存到文件夹</button>
+    <button id="generatePdfBtn">📄 一键生成PDF</button>
+    <button id="clearAllBtn" class="danger">🗑 清空全部</button>
+  </div>
+
+  <div id="grid">
+    <div class="empty-state">
+      <span class="icon">🖼</span>
+      <div>上传 PDF 或图片文件，自动生成反转预览</div>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
