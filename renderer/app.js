@@ -259,6 +259,44 @@ function clearAll() {
   toast('已清空所有图片');
 }
 
+/* ── Shared Canvas for reuse ── */
+let sharedCanvas = null;
+function getSharedCanvas(w, h) {
+  if (!sharedCanvas) sharedCanvas = document.createElement('canvas');
+  if (sharedCanvas.width !== w || sharedCanvas.height !== h) {
+    sharedCanvas.width = w;
+    sharedCanvas.height = h;
+  }
+  return sharedCanvas;
+}
+
+/* ── Chunked grayscale + invert (yields to UI via rAF) ── */
+async function invertPixels(ctx, w, h) {
+  const imageData = ctx.getImageData(0, 0, w, h);
+  const d = imageData.data;
+  const CHUNK = 500000; // pixels per chunk (~2M bytes)
+  const totalPixels = w * h;
+
+  for (let offset = 0; offset < totalPixels; offset += CHUNK) {
+    const end = Math.min(offset + CHUNK, totalPixels);
+    const startIdx = offset * 4;
+    const endIdx = end * 4;
+
+    for (let j = startIdx; j < endIdx; j += 4) {
+      const gray = 0.299 * d[j] + 0.587 * d[j + 1] + 0.114 * d[j + 2];
+      const val = 255 - Math.round(gray);
+      d[j] = val;
+      d[j + 1] = val;
+      d[j + 2] = val;
+    }
+
+    if (end < totalPixels) {
+      await new Promise(r => requestAnimationFrame(r));
+    }
+  }
+  ctx.putImageData(imageData, 0, 0);
+}
+
 /* ── Image Processing ── */
 async function processImage(file) {
   const url = URL.createObjectURL(file);
@@ -269,26 +307,14 @@ async function processImage(file) {
     el.src = url;
   });
 
-  const canvas = document.createElement('canvas');
-  canvas.width = img.naturalWidth;
-  canvas.height = img.naturalHeight;
+  const canvas = getSharedCanvas(img.naturalWidth, img.naturalHeight);
   const ctx = canvas.getContext('2d');
   ctx.drawImage(img, 0, 0);
   URL.revokeObjectURL(url);
 
   const originalUrl = canvas.toDataURL('image/png');
 
-  // Grayscale + invert
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const d = imageData.data;
-  for (let j = 0; j < d.length; j += 4) {
-    const gray = 0.299 * d[j] + 0.587 * d[j + 1] + 0.114 * d[j + 2];
-    const val = 255 - Math.round(gray);
-    d[j] = val;
-    d[j + 1] = val;
-    d[j + 2] = val;
-  }
-  ctx.putImageData(imageData, 0, 0);
+  await invertPixels(ctx, canvas.width, canvas.height);
   const invertedUrl = canvas.toDataURL('image/png');
 
   return [{
@@ -299,22 +325,18 @@ async function processImage(file) {
   }];
 }
 
-/* ── PDF Processing ── */
-async function processPDF(file) {
+/* ── PDF Processing (progressive: yields each page) ── */
+async function* processPDFPages(file) {
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
   const baseName = file.name.replace(/\.pdf$/i, '');
-
-  const batch = [];
 
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const scale = Math.min(2, 1800 / Math.max(page.view[2], page.view[3]));
     const viewport = page.getViewport({ scale });
 
-    const canvas = document.createElement('canvas');
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
+    const canvas = getSharedCanvas(viewport.width, viewport.height);
     const ctx = canvas.getContext('2d');
 
     ctx.fillStyle = '#fff';
@@ -324,27 +346,16 @@ async function processPDF(file) {
 
     const originalUrl = canvas.toDataURL('image/png');
 
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const d = imageData.data;
-    for (let j = 0; j < d.length; j += 4) {
-      const gray = 0.299 * d[j] + 0.587 * d[j + 1] + 0.114 * d[j + 2];
-      const val = 255 - Math.round(gray);
-      d[j] = val;
-      d[j + 1] = val;
-      d[j + 2] = val;
-    }
-    ctx.putImageData(imageData, 0, 0);
+    await invertPixels(ctx, canvas.width, canvas.height);
     const invertedUrl = canvas.toDataURL('image/png');
 
-    batch.push({
+    yield {
       id: ++state.idCounter,
       name: `${baseName}_p${i}`,
       originalUrl,
       invertedUrl,
-    });
+    };
   }
-
-  return batch;
 }
 
 async function handleFiles(files) {
@@ -366,18 +377,27 @@ async function handleFiles(files) {
   if (state.items.length === 0) grid.innerHTML = '';
 
   let total = 0;
+
+  // Process PDFs page-by-page, rendering each page immediately
   for (const file of pdfs) {
     try {
-      setStatus(`正在处理 PDF: ${file.name}`, true);
-      const pages = await processPDF(file);
-      state.items.push(...pages);
-      total += pages.length;
-      renderGrid();
+      let pageCount = 0;
+      for await (const item of processPDFPages(file)) {
+        state.items.push(item);
+        total++;
+        pageCount++;
+        setStatus(`正在处理 PDF: ${file.name} (第 ${pageCount} 页)`, true);
+        renderGrid();
+        // Yield to keep UI responsive between pages
+        await new Promise(r => requestAnimationFrame(r));
+      }
     } catch (err) {
       console.error(err);
       toast(`处理 "${file.name}" 失败`, 'error');
     }
   }
+
+  // Process images with chunked pixel ops (non-blocking)
   for (const file of imgs) {
     try {
       setStatus(`正在处理图片: ${file.name}`, true);

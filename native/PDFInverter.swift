@@ -89,10 +89,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let bridgeJS = WKUserScript(source: BridgeHandler.jsBridge, injectionTime: .atDocumentStart, forMainFrameOnly: false)
         config.userContentController.addUserScript(bridgeJS)
 
-        webView = WKWebView(frame: rect, configuration: config)
+        webView = WKWebView(frame: window.contentView!.bounds, configuration: config)
         webView.setValue(false, forKey: "drawsBackground")
-
-        window.contentView = webView
+        webView.autoresizingMask = [.width, .height]
+        window.contentView!.addSubview(webView)
 
         // Menu bar
         let menuBar = NSMenu()
